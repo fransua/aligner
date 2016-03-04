@@ -1,0 +1,507 @@
+#!/usr/bin/python
+"""
+30 Sep 2011
+
+
+"""
+
+__author__  = "Francois-Jose Serra"
+__email__   = "francois@barrabin.org"
+__licence__ = "GPLv3"
+__version__ = "1.0"
+
+
+from optparse                import OptionParser, OptionGroup
+from align.utils.seq_utils import translate, get_genetic_code, write_fasta, write_rfasta
+from align.ali_parser.parser   import parse_fasta, parse_mcoffee_score, parse_mcoffee_aln
+from re                      import match
+from re                      import compile as compil
+from sys                     import stderr
+from subprocess              import Popen, PIPE
+from os.path                 import dirname
+from multiprocessing         import cpu_count
+import os
+
+
+def main():
+    """
+    main function
+    """
+    opts         = get_options()
+    genetic_code = None if opts.aa else get_genetic_code (opts.code)
+    sequences    = parse_fasta (opts.fastafile, genetic_code)
+    tmp_dir      = dirname(opts.outfile) + ('/tmp' if '/' in opts.outfile else 'tmp')
+    
+    Popen('mkdir -p ' + tmp_dir, shell=True).communicate()
+
+    ### if we need to align:
+    # write sense and anti-sense translated sequences
+    write_rfasta(sequences, tmp_dir + '/prot.fasta', what='prot')
+    if opts.align == 2:
+        write_rfasta(sequences, tmp_dir + '/torp.fasta', what='prot', rev=True)
+    # run alignment
+    if opts.align:
+        run_alignments(tmp_dir, opts.cpus, opts.quiet, opts.align)
+    # merge all in one, keep only sites with score better than m_coffee cut
+    aligners = [ali for ali in BINARIES if 'fun' in BINARIES[ali]]
+    if len(aligners) > 1 or opts.align == 2:
+        merge_mcoffee(tmp_dir, opts.mcoffee_cut, sequences)
+    else:
+        aa_ali = parse_fasta(tmp_dir + '/prot.fasta_' + aligners[0])
+        for seq in sequences:
+            sequences[seq]['aa_ali'] = aa_ali[seq]['seq']
+            for elt in xrange(len(sequences[seq]['aa_ali'])):
+                if sequences[seq]['aa_ali'][elt] == '-':
+                    sequences[seq]['codon'].insert(elt, '---')
+                    continue
+    
+    # trimal
+    if opts.trimseq:
+        trim_path = trim_sequences(tmp_dir, opts.outfile, sequences,
+                                   opts.trimseq, quiet=opts.quiet)
+    if opts.trimcol != 'None':
+        trim_columns(sequences, opts, tmp_dir)
+
+    # write codon sequences
+    if opts.aa:
+        write_fasta(sequences, opts.outfile, what='seq')
+    else:
+        write_fasta(sequences, opts.outfile, what='codon')
+
+    # print map
+    if opts.printmap:
+        printmap(sequences, opts.outfile + '.map', opts.pymap)
+
+def printmap(seqs, map_path, pymap=True):
+    '''
+    for a given alignment read from file, and the corresponding
+    nucleotides sequences object (before alignment), create a map file
+    '''
+    out = open(map_path,'w')
+    if not pymap:
+        out.write('Aligned Sequences map:\n'+\
+                  '\t\t(column number in the alignment with no gap allowed / ' \
+                   + 'position in sequence / ' \
+                  + 'column number of the alignment with gaps)\n\n')
+
+    cols = zip (*[seqs[s]['codon'] for s in seqs])
+    #for c in cols: print c
+    nogapcount = []
+    for i in cols:
+        if '---' not in i:
+            nogapcount.append (max (nogapcount)+1)
+        else:
+            nogapcount.append (0)
+    nogapcount = [str(x-1) for x in nogapcount]
+    nogapcount = [('-1' != x)*x+('-1'==x)*'*' for x in nogapcount]
+    if pymap:
+        out.write ('no gap\t' + ' '.join (nogapcount) + '\n')
+    for s in seqs.keys():
+        codons = seqs[s]['codon']
+        seqcount = [str (len (codons[:x])-codons[:x].count('---')) \
+                    *(codons[x] != '---')+'*'*(codons[x] == '---') for x in \
+                    range(len(codons))]
+        if pymap:
+            out.write(s + '\t' + ' '.join(seqcount)+'\n')
+            continue
+        gapmap = zip (nogapcount, seqcount, map(str, range(len (codons))))
+        prestring  =  map('/'.join, gapmap)
+        poststring = ['%-20s' % (prestring[x])*(x%5==0) for x in range (len (prestring))]
+        out.write('%-20s' % (s)+'\n')
+        out.write(' '*21 + ''.join(poststring)+'\n')
+        out.write('  ' + ''.join([('%20s' % ('|')*(x%5==0)) for x in \
+                                  range (len (prestring))])+'\n')
+        out.write(' '*20+' '.join(codons)+'\n')
+    out.close()
+
+        
+def trim_columns(sequences, opts, tmp_dir):
+    aali_path = tmp_dir + '/aligned.fasta'
+    write_rfasta(sequences, aali_path, what='aa_ali')
+    trimcl_path = tmp_dir + '/trimmed.fasta'
+    if opts.trimcol == 'specific':
+        cmds = [BINARIES['trimal']['bin'], '-in' , aali_path,
+                '-out', trimcl_path, '-gt' , str (opts.gaptreshold),
+                '-st' , str (opts.similarity), '-colnumbering']
+    else:
+        cmds = [BINARIES['trimal']['bin'], '-in' , aali_path,
+                '-out', trimcl_path, '-' + opts.trimcol,
+                '-colnumbering']
+    proc = Popen(cmds, stdout=PIPE, stderr=PIPE)
+    (keeplist, err) = proc.communicate()
+    LOG.append('')
+    if 'ERROR' in err:
+        exit('ERROR: trimming columns:\n' + err)
+
+    keeplist = str (keeplist).strip().split(', ')
+
+    algt = get_alignment(sequences)
+    nnn = compil('[A-Z]{3}')
+    if opts.nogap: 
+        for (col, num) in zip (algt, range (len (algt))):
+            if not str(num) in keeplist:
+                algt[num] = [ nnn.sub('', x) for x in  col ]
+                algt[num] = [ compil('---').sub('', x) for x in algt[num]]
+    else:
+        for (col, num) in zip (algt, range (len (algt))):
+            if not str(num) in keeplist:
+                algt[num] = [ nnn.sub('NNN', x) for x in col ]
+    for (key, seq) in zip (sorted (sequences.keys()), zip (*algt)):
+        sequences[key]['codon'] = seq
+
+        
+def get_alignment(seqs, typ='codon'):
+    '''
+    returns alignment from file
+    TODO: find better way than zip (*algt) to reverse it
+    '''
+    keyseqs   = sorted(seqs.keys())
+    seqlist   = [seqs[k][typ] for k in keyseqs]
+    align = zip(*seqlist)
+    return align
+
+def trim_sequences(path, seq_path, seqs, trimseq, quiet=True):
+    trimsq_path = path + '/seq_trimmed.fasta'
+    proc = Popen([BINARIES['trimal']['bin'],
+                  '-in'        , seq_path,
+                  '-out'       , trimsq_path,
+                  '-resoverlap', str(trimseq[1]),
+                  '-seqoverlap', str(trimseq[2]),
+                  '-cons'      , '100'
+                  ], stdout=PIPE)
+    if proc.communicate()[1] is not None:
+        print >> stderr, proc.communicate()[0]
+        exit('\nERROR: trimming sequences')
+
+    trimmed = parse_fasta(trimsq_path)
+    for seq in trimmed:
+        seqs[seq]['ali'] = trimmed[seq]['seq']
+    
+    trimmed = filter (lambda x: not seqs[x].has_key('ali'), seqs)
+    if not quiet:
+        print >> stderr, 'WARNING: trimmed sequences: \n\t' + \
+              '\n\t'.join(trimmed)
+    LOG.append('')
+    if len (trimmed) > 0:
+        LOG[-1] += '->trimmed sequences: \n\t' + \
+               '\n\t'.join(trimmed) + '\n'
+    else: LOG[-1] += '->no trimmed sequences\n'
+
+    for s in seqs.keys():
+        if s in trimmed:
+            del(seqs[s])
+    return trimsq_path
+    
+    
+def run_alignments(path, cpus=1, quiet=False, tries=2):
+    """
+    """
+    procs = []
+    files = []
+    aligners = [ali for ali in BINARIES if 'fun' in BINARIES[ali]]
+    for ali in sorted(aligners, key=lambda x:['probcons', 'dialign',
+                                              'muscle','mafft'].index(x)):
+        if not quiet:
+            print 'Aligning with: ' + ali
+        for sense in ['prot', 'torp'][:tries]:
+            if not quiet:
+                print '  -> ' + ('sense' if sense == 'prot' else 'anti-sense')
+            files.append('%s.fasta_%s' % (sense, ali))
+            procs.append (BINARIES[ali]['fun'](path + '/%s.fasta' % (sense)))
+            if len (procs) < cpus: continue
+            while len (procs) != 0:
+                out, err = procs.pop(0).communicate()
+                if 'ERROR' in err:
+                    print >> stderr, out, err
+                    raise Exception ('\nERROR: running alignments')
+    while len (procs) != 0:
+        out, err = procs.pop(0).communicate()
+        if 'ERROR' in err:
+            print >> stderr, out, err
+            raise Exception ('\nERROR: running alignments')
+    for fil in files:
+        if fil.startswith('torp'):
+            seqs = parse_fasta (path + '/' + fil)
+            for seq in seqs:
+                seqs[seq]['seq'] = seqs[seq]['seq'][::-1]
+            write_rfasta (seqs, path + '/' + fil)
+
+
+def __run_muscle(path):
+    return Popen([BINARIES['muscle']['bin'],
+                  '-quiet', #'-stable',
+                  '-maxiters' , '999',
+                  '-maxhours' , '24 ',
+                  '-maxtrees' , '100',
+                  '-in'       , path,
+                  '-out'      , path + '_muscle',
+                  ], stdout=PIPE, stderr=PIPE)
+
+
+def __run_mafft(path):
+    return Popen ('%s --auto %s > %s_mafft' % (BINARIES['mafft']['bin'], path, path),
+                  shell=True, stdout=PIPE, stderr=PIPE)
+
+
+def __run_dialign(path):
+    return Popen ('%s /usr/share/dialign-tx %s %s_dialign' \
+                  % (BINARIES['dialign']['bin'], path, path),
+                  shell=True, stdout=PIPE, stderr=PIPE)
+
+
+def __run_probcons(path):
+    return Popen ('%s %s > %s_probcons' \
+                  % (BINARIES['probcons']['bin'], path, path),
+                  shell=True, stdout=PIPE, stderr=PIPE)
+
+
+def merge_mcoffee(path, score, sequences):
+    """
+    TODO: get check content of files
+    """
+    files = ','.join ([path+'/'+f for f in os.listdir (path) if '.fasta_' in f])
+    Popen ('%s -in=%s -outfile=%s/merged_outaln.score -output score_ascii -newtree %s' % \
+           (BINARIES['mcoffee']['bin'], files, path, path+'/t-coff.tree'),
+           shell=True, stdout=PIPE,
+           stderr=PIPE).communicate()[1]
+    Popen ('%s -in=%s -outfile=%s -newtree %s' % \
+           (BINARIES['mcoffee']['bin'], files, path + '/merged_outaln.aln',
+            path + '/t-coff.tree'),
+           shell=True, stdout=PIPE,
+           stderr=PIPE).communicate()[1]
+    parse_mcoffee_score (path + '/merged_outaln.score', sequences)
+    parse_mcoffee_aln (path + '/merged_outaln.aln', sequences)
+    for seq in sequences:
+        for elt, sco in enumerate(sequences[seq]['score']):
+            if sequences[seq]['aa_ali'][elt] == '-':
+                sequences[seq]['codon'].insert(elt, '---')
+                continue
+            if int (sco) < score:
+                sequences[seq]['codon'][elt] = 'nnn'
+                sequences[seq]['aa_ali'][elt] = 'X'
+
+             
+def which(program):
+    def is_exe(fpath):
+        return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
+
+    fpath, fname = os.path.split(program)
+    if fpath:
+        if is_exe(program):
+            return program
+    else:
+        for path in os.environ["PATH"].split(os.pathsep):
+            exe_file = os.path.join(path, program)
+            if is_exe(exe_file):
+                return exe_file
+    return None
+
+   
+def get_options():
+    '''
+    parse option from call
+    '''
+    parser = OptionParser(
+        version=__version__,
+        usage="%prog [options] file [options [file ...]]",
+        description="""\
+        Reads sequences from file fasta format, and align them. If input sequences are nucleotidic
+        translate them using a given genetic code, and aligns amino-acids.
+        If several aligners are available
+        """
+        )
+    parser.add_option('-i', dest='fastafile', metavar="PATH", 
+                      help='path to input file in fasta format')
+    parser.add_option('-o', dest='outfile', metavar="PATH", 
+                      help='path to output file in fasta format')
+    parser.add_option('--aa', action='store_true', 
+                      dest='aa', default=False, 
+                      help='''[%default] sequences are proteins.''')
+    parser.add_option('--align', action='store', choices=['0', '1', '2'],
+                      dest='align', default=2,
+                      help='''[%default] options for alignment, 0: do not align
+                      1: align, 2: align sequences in sense and anti-sense.''')
+    parser.add_option('--align_tools', action='store',
+                      dest='align_tools', default='all',
+                      help='''[%default] Use only aligmers listed
+                      (e.g.: --align_tools=muscle,probcons)''')
+    parser.add_option('-M', '--printmap', action='store_true', 
+                      dest='printmap', default=False, 
+                      help=
+                      '''[%default] save a map of alignement not human
+                      friendly by default, see "--humanmap" option''')
+    parser.add_option('--humanmap', action='store_false', 
+                      dest='pymap', default=True, 
+                      help=
+                      '[False] print human readable map. Only with -M option.')
+    parser.add_option('--musclescore', action='store_true', \
+                      dest='score', default=False, \
+                      help='[%default] generate muscle score file.')
+    parser.add_option('-r', '--remove_stop', action='store_false', \
+                      dest='remove_stop', default=True, \
+                      help=\
+                      '[%default] remove stop codons from alignment.')
+    parser.add_option('--mcoffee_cut', dest='mcoffee_cut', action="store", \
+                      metavar="FLOAT", default=3, type='int', \
+                      help=\
+                      '''[%default] Minimum similarity allowed
+                      (see M-Coffee User Guide). Columns bellow this cutoff
+                      will appear with lower-case "nnn".''')
+    parser.add_option('-c', '--cleannames', action='store_false', \
+                      dest='clean', default=True, \
+                      help='[%default] removes sequence decription.')
+    parser.add_option('-q', '--quiet', action='store_true', \
+                      dest='quiet', default=False, \
+                      help='[%default] shut!')
+    parser.add_option('--log', action='store_true', \
+                      dest='print_log', default=False, \
+                      help=\
+                      '[%default] Print aligner Log.')
+    parser.add_option('--procs', dest='cpus', action="store",
+                      metavar="NUMBER", default=1, type='int', help=
+                      '[1] Numebr of processors/cpus to be used (%s available).' % 
+                      (cpu_count()))
+
+    trimming = OptionGroup(parser, "Option for TRIMAL")
+    trimming.add_option('-t', '--trimseqs', action='store_const', const=[True, 0.7, 70], \
+                      dest='trimseq', default=False,
+                      help=
+                      '''[%default] remove bad sequences (uses trimAl).
+                      By default residue overlap is set to 0.7, and
+                      sequence overlap to 70. Use --resoverlap and
+                      --seqoverlap to change it.
+                      ''')
+    trimming.add_option('--resoverlap', dest='trimseq[1]', action="store", 
+                      metavar="FLOAT", default=0.7, type='float', 
+                      help=
+                      '''[%default] Minimum overlap of a positions with
+                      other positions in the column to be considered a
+                      "good position". (see trimAl User Guide).''')
+    trimming.add_option('--seqoverlap', dest='trimseq[2]', action="store", 
+                      metavar="PERCENT", default=70, type='int', help=
+                      '''[%default] Minimum percentage of "good 
+                      positions" that a sequence must have in order to
+                      be conserved. (see trimAl User Guide).''')
+    trimming.add_option('--nogap', action='store_true', 
+                      dest='nogap', default=False, 
+                      help=
+                      '''[%default] removes all gaps from alignement.
+                      (uses trimAl).''')
+    trimming.add_option('--maskcol', metavar='OPTION', dest='trimcol', 
+                      default='None', 
+                      choices = ['None','automated1', 'softmasking', 
+                                 'gapyout', 'strict', 'strictplus', 
+                                 'specific'], 
+                      help=
+                      '''[%default] mask (with upper-case "NNN") bad columns
+                      (uses trimAl). Masking options are: None, automated1,
+                      softmasking, gapyout, strict, strictplus or specific.
+                      ''')
+    trimming.add_option('--gt', dest='gaptreshold', action="store", \
+                      metavar="FLOAT", default=0, type='float', \
+                      help=\
+                      '''[%default] 1 - (fraction of sequences with a gap
+                      allowed). Only use with specific maskcol option.
+                      (see trimAl User Guide).''')
+    trimming.add_option('--st', dest='similarity', action="store", \
+                      metavar="FLOAT", default=0, type='float', \
+                      help=\
+                      '''[%default] Minimum average similarity allowed
+                      (see trimAl User Guide).''')
+
+    binaries = OptionGroup(parser, "Path to binaries",
+                           '(when default is "none", program may not '+\
+                           "be installed)")
+    binaries.add_option('--musclepath', dest='muscle_bin', \
+                        metavar="PATH", help=\
+                        '[%default] path to muscle binary.', \
+                        default=which('muscle'))
+    binaries.add_option('--mafftpath', dest='mafft_bin', \
+                        metavar="PATH", help=\
+                        '[%default] path to mafft binary.', \
+                        default=which('mafft'))
+    binaries.add_option('--dialignpath', dest='dialign_bin', \
+                        metavar="PATH", help=\
+                        '[%default] path to dialign binary.', \
+                        default=which('dialign-tx'))
+    binaries.add_option('--probconspath', dest='probcons_bin', \
+                        metavar="PATH", help=\
+                        '[%default] path to probcons binary.', \
+                        default=which('probcons'))
+    binaries.add_option('--mcoffeepath', dest='mcoffee_bin', \
+                        metavar="PATH", help=\
+                        '[%default] path to mcoffe binary.', \
+                        default=which('t_coffee'))
+    binaries.add_option('--trimalpath', dest='trimal_bin', \
+                        metavar="PATH", help=
+                        '[%default] path to trimal binary.', \
+                        default=which('trimal'))
+
+    transl = OptionGroup(parser, "Relative to translation")
+    transl.add_option('--translate', action='store_true', \
+                      dest='only_translate', default=False, \
+                      help=\
+                      '[%default] do not align just translate fasta.')
+    transl.add_option('--gencode', metavar='OPTION', dest='code', \
+                      default='std', \
+                      choices = ['std', 'vmt', 'ymt', 'mmt', 'imt', 'cnc',\
+                                 'emi', 'enu', 'bpp', 'ayn', 'ami', 'afm',\
+                                 'bma', 'cmi', 'tmi', 'som', 'thm'], \
+                      help=\
+                      '''[%default] Choose genetic code between:
+                        std -> Standard                           
+                        cnc -> Ciliate Nuclear, Dasycladacean Nuclear,
+                        ---    Hexamita Nuclear                           
+                        bpp -> Bacterial and Plant Plastid                           
+                        ayn -> Alternative Yeast Nuclear                           
+                        vmt -> Vertebrate Mitochondrial                           
+                        ymt -> Yeast Mitochondrial                           
+                        mmt -> Mold Mitochondrial, Protozoan  
+                        ---    Mitochondrial, Coelenterate Mitochondrial,
+                        ---    Mycoplasma and Spiroplasma                           
+                        imt -> Invertebrate Mitochondrial                           
+                        emi -> Echinoderm Mitochondrial and Flatworm
+                        ---    Mitochondrial                           
+                        enu -> Euplotid Nuclear                           
+                        ami -> Ascidian Mitochondrial                           
+                        afm -> Alternative Flatworm Mitochondrial                           
+                        bma -> Blepharisma Macronuclear                           
+                        cmi -> Chlorophycean Mitochondrial                           
+                        tmi -> Trematode Mitochondrial                           
+                        som -> Scenedesmus obliquus Mitochondrial                           
+                        thm -> Thraustochytrium Mitochondrial                           
+                      ''')
+    parser.add_option_group(binaries)
+    parser.add_option_group(trimming)
+    parser.add_option_group(transl)
+    opts = parser.parse_args()[0]
+    # check installed programs
+    for exe in binaries.option_list:
+        if not getattr(opts, exe.dest):
+            del(BINARIES[exe.dest[:-4]])
+            continue
+        if opts.align_tools != 'all' and exe.dest[:-4] not in opts.align_tools:
+            if 'fun' in BINARIES[exe.dest[:-4]]:
+                del(BINARIES[exe.dest[:-4]]['fun'])
+            continue
+        BINARIES[exe.dest[:-4]]['bin'] = getattr(opts, exe.dest)
+    if not 'muscle' in BINARIES or not 'mafft' in BINARIES  \
+       or not 'dialign' in BINARIES or not 'probcons' in BINARIES:
+        stderr.write('WARNING: No aligner seems to be installed.\n')
+    if not opts.outfile or not opts.fastafile:
+        exit(parser.print_help())
+    opts.align = int(opts.align)
+    return opts
+
+
+BINARIES = { 'muscle'  : {'fun': __run_muscle  },
+             'mafft'   : {'fun': __run_mafft   },
+             'probcons': {'fun': __run_probcons},
+             'dialign' : {'fun': __run_dialign },
+             'mcoffee' : {'bin': which('t_coffee')},
+             'trimal'  : {'bin': which('trimal')}}
+
+LOG = []
+
+if __name__ == "__main__":
+    exit(main())

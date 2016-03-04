@@ -1,0 +1,60 @@
+CLUSTAL FORMAT for T-COFFEE Version_8.99 [http://www.tcoffee.org] [MODE:  ], CPU=0.00 sec, SCORE=99, Nseq=6, Len=349 
+
+Macaca_mulatta          YTNA-FPLSSLQLILYIPLQTFTRHLRN-HCSKKKLFKTNINKKVHIIYS
+Gorilla_gorilla         YTNVIFPI-------VLPPTYSLRAMTKIHTTLEKSLQQKI-----IVRN
+Callithrix_jacchus      YTNVNFPL-------VLPPTHFLRAMKEIHTAIEKLLQQII-----IVSN
+Semnopithecus_entellus  YTNVIFPL-------VLPPNNFLRAMKEIHTAIEKLLQQII-----IVSN
+Pan_troglodytes         -TNVIFPS-------VLPPTYSLYATIDIHKTLEKSLQQKI-----IVVN
+Alouata_seniculus       YTIVILPV-------VLPPTYSLRALTKIHTTLEKSLQQKI-----IVRN
+                         * . :*         :*         . * : :* ::  *     *: .
+
+Macaca_mulatta          ELKLHPSHNLYK-----IQLNIDVSLANSNTNSMTKTKNQTTYYSYLRKP
+Gorilla_gorilla         FNYQKSSYYIFKLKIAPIPLSIEYTVVNANL-CLSRIQTQIPRH---KQN
+Callithrix_jacchus      FNYQKSSYYIFKTKIAPIPLSTEYTIVNANL-YLSRIQTQIPRH---KQD
+Semnopithecus_entellus  FNYQKSSYYIFKPKIAPIPLSTEYTIVNANL-YLSRIQIQIPRH---KQD
+Pan_troglodytes         NNKQKSSYYIFK-KIAPIPHLILETAVNRHL-CLYRIQTQIPRH---KQN
+Alouata_seniculus       FNYQKSSYYIFKPKIAPIPLSIEYTVVNANL-CLSRIQTRIPRH---KQN
+                            :.*: ::*     *      : .* :   : : : : . :   :: 
+
+Macaca_mulatta          QNSLTRSPRHDTKTLRSSNVH-----SKLRLKTTNFDTSQS------NKE
+Gorilla_gorilla         NRQLTIPTKDNHKTVSPDHQDMIQKPQDLQMYIVNFVLKQPI---LILGN
+Callithrix_jacchus      NR--TIPTQDNHKTISPDHQEIIQKPQDPQMYTVSFVLEQPI---LIFDN
+Semnopithecus_entellus  NRELTIPTQDNHKTISPD--------------------EQPI---LIFDN
+Pan_troglodytes         NRQLTMPTQDNHKTISPDHQDMIQKPQDLQMYIVNFVLKQPT---LILDN
+Alouata_seniculus       NRQLTIPTKDNHKTISPDHQDMIQKPQDLQMYIVNFVLKQPIDTSQSNKE
+                        :.  * ..:.: **: ..                    .*.        :
+
+Macaca_mulatta          TKHKVQP--------YTIPNYINK--PERVR-IYRFCYN---------FV
+Gorilla_gorilla         LIRKLNTKYSHLAHISLKTDYLSQITPLKLTTLYQIIEY-------IAFV
+Callithrix_jacchus      LIRKLNPEYSHLAHIFLKADYLSQITSKKLTTLQQTILN-------IAFV
+Semnopithecus_entellus  LIRKLNPEYS-LAHIFLKADYLSQITSQKLTTLYQTILNSQSGRKCIAFV
+Pan_troglodytes         LIRKLNPEYSHLV-ISLKTDYLSQITPKKLTTLYQIILI-------SAFI
+Alouata_seniculus       TKHKVQPSSTHI----LKTDYLSQITPLKLTTLYQIILY-------IAFV
+                          :*::.           .:*:.:  . ::  : :             *:
+
+Macaca_mulatta          SVLYSKQFQYYKRGLKRNLTHHLEAVHLSSSVSAPSPRFKNTNNALQVLH
+Gorilla_gorilla         IILS----QFYTQNHTKTL---LSNFNITSVV------FKETEHITLKRY
+Callithrix_jacchus      KTLS----QSYTENHIKTV---FSIFNIKSVA------YKATQHATTKQY
+Semnopithecus_entellus  KTLS----QSYT----------FGIFNIKSVA------YKATKHATTKQY
+Pan_troglodytes         IILS----QFYTKNHTKTL---LGNFNITSVV------FKETQHNTLKRY
+Alouata_seniculus       IILS----QFYTQNHTKTL---LSNFNITSVV------FKETEHITLKRY
+                          *     * *.          :  .::.* .      :* *::     :
+
+Macaca_mulatta          KTL---SISNCHSEQSSSNININILTIRLEERIILLVYLSLIDTLIWQLE
+Gorilla_gorilla         TYLHIQKYKQCTSSSTQNSEYLPEGTIVIKHQYEYINHKTLITYYLVSLP
+Callithrix_jacchus      NYFH--QYQRLHRDSKILTMYFKLYTKLFISVTAIVNSRHQLSQLTYESQ
+Semnopithecus_entellus  NYFH--QYQRPHRDSKILTMYFKLYTKLFISVTAIVNSRHQISQLTYESE
+Pan_troglodytes         IYLH--QYQRPHRDSKILTIHFKFYTKLLVFLSAIVNSRHQISILTYESE
+Alouata_seniculus       TYLH--QYQRPHRDSKILTMHFKFYTKLLVFLTAIVNNRHQIGILIYEPQ
+                          :   . ..   ...  .  :   *  :      :     :     .  
+
+Macaca_mulatta          IPTKKLG------STGRNFEN--FHSTYTILQLN---------------
+Gorilla_gorilla         NPHRHINMVIRNTDQKTRFHRSKFRKLSLNIHYFIIKL-----------
+Callithrix_jacchus      NSNNILSCKFTQPSQTHQYDNQKYRPKNSVLQVEISKTFTQHILFYKQT
+Semnopithecus_entellus  NSNNILSCEFTEPSQTHEYDNQKYRPKNSVLQVEISKTFTQHILFYKQT
+Pan_troglodytes         DSNNVLFCKFTEPSQTHQYGNQKYRPKNSVPQVEILKTFTQHTLFYNQN
+Alouata_seniculus       DSNNVFSCKFTQPSQTDQYGNQNYRPNNSVPQDEFLNTFTQYTPFYNT-
+                         . . :       .   .: .  ::      :                 
+
+
+

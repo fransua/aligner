@@ -1,0 +1,45 @@
+Reads sequences from file fasta format, and align them. 
+If input sequences are nucleotidic translate them using a given genetic code,
+aligns amino-acids sequences, and revert alignment to nucleotide sequences.
+
+Alignment:
+----------
+Can use all of these aligners (if available on your computer):
+  * muscle (1)
+  * mafft (2)
+  * dialign-tx (3)
+  * probcons (4)
+
+Also gives the option to align inverted sequences.
+
+Masking:
+--------
+Once generated your alignments, you can merge them with t-coffee (5). 
+Also a cut-off can be applied here, in order 
+to mask unstable regions of the alignment 
+ -> Mask, here consists in replacing codons by "nnn" (lower case)
+
+Clean alignments with trimal (6), but do not remove poorly aligned columns, it also
+masks them, this time "NNN" (upper case).
+
+Rreferences:
+------------
+ (1) Edgar R C 2004 
+     MUSCLE: multiple sequence alignment with high accuracy and high throughput. 
+     Nucleic acids research 32 1792–7
+ (2) Katoh K, Kuma K-ichi, Toh H and Miyata T 2005 
+     MAFFT version 5: improvement in accuracy of multiple sequence alignment. 
+     Nucleic acids research 33 511–8
+ (3) Subramanian A R, Kaufmann M and Morgenstern B 2008 
+     DIALIGN-TX: greedy and progressive approaches for segment-based multiple sequence alignment. 
+     Algorithms for molecular biology : AMB 3 6
+ (4) Do C B, Mahabhashyam M S P, Brudno M and Batzoglou S 2005 
+     ProbCons: Probabilistic consistency-based multiple sequence alignment. 
+     Genome research 15 330–40
+ (5) Notredame C 2010 
+     Computing multiple sequence/structure alignments with the T-coffee package. 
+     Current protocols in bioinformatics / editoral board, Andreas D. Baxevanis ... [et al.] Chapter 3 Unit 3.8.1–25
+ (6) Capella-Gutiérrez S, Silla-Martínez J M and Gabaldón T 2009 
+     trimAl: a tool for automated alignment trimming in large-scale phylogenetic analyses. 
+     Bioinformatics (Oxford, England) 25 1972–3
+
